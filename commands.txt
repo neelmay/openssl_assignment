@@ -1,0 +1,112 @@
+# Prepare root directory
+mkdir ca
+cd ca
+
+mkdir certs crl newcerts private
+chmod 700 private
+vi index.txt
+echo 1000 > serial
+
+# Create ROOT key
+openssl genrsa -aes256 -out private/ca.key.pem 4096
+chmod 400 private/ca.key.pem
+
+# Create the root certificate
+openssl req -config openssl.cnf \
+	-key private/ca.key.pem \
+	-new -x509 -days 7300 -sha256 -extensions v3_ca \
+	-out certs/ca.cert.pem
+
+chmod 444 certs/ca.cert.pem
+
+# Verify the root certificate
+openssl x509 -noout -text -in certs/ca.cert.pem
+
+# Intermideate Directory
+# Prepare the directory
+mkdir intermediate
+cd intermediate
+
+mkdir certs crl csr newcerts private
+
+chmod 700 private
+vi index.txt
+echo 1000 > serial
+
+echo 1000 > intermediate/crlnumber
+
+# Create the intermediate key
+openssl genrsa -aes256 \
+	-out intermediate/private/intermediate.key.pem 4096
+
+chmod 400 intermediate/private/intermediate.key.pem
+
+# Create the intermediate certificate
+openssl req -config intermediate/openssl.cnf -new -sha256 \
+	-key intermediate/private/intermediate.key.pem \
+	-out intermediate/csr/intermediate.csr.pem
+
+
+#############DETAILS##################
+Country Name (2 letter code) [XX]:US
+State or Province Name []:NJ
+Locality Name []: NB
+Organization Name []:Rutgers
+Organizational Unit Name []:CS419
+Common Name []:<netid>
+Email Address []:neelmay@gmail.com
+######################################
+
+openssl ca -config openssl.cnf -extensions v3_intermediate_ca \
+	-days 3650 -notext -md sha256 \
+	-in intermediate/csr/intermediate.csr.pem \
+	-out intermediate/certs/intermediate.cert.pem
+
+# Verify the intermediate certificate
+openssl x509 -noout -text \
+	-in intermediate/certs/intermediate.cert.pem
+
+openssl verify -CAfile certs/ca.cert.pem \
+	intermediate/certs/intermediate.cert.pem
+
+# Create the certificate chain file
+cat intermediate/certs/intermediate.cert.pem \
+	certs/ca.cert.pem > intermediate/certs/ca-chain.cert.pem
+
+chmod 444 intermediate/certs/ca-chain.cert.pem
+
+##############################################################
+# Sign server and client certificates
+# Create a key
+
+openssl genrsa -aes256 \ 
+	-out intermediate/private/www.example.com.key.pem 2048
+
+# Create a certificate
+openssl req -config intermediate/openssl.cnf \
+	-key intermediate/private/www.example.com.key.pem \
+	-new -sha256 -out intermediate/csr/www.example.com.csr.pem
+
+#############DETAILS##################
+Country Name (2 letter code) [XX]:US
+State or Province Name []:NJ
+Locality Name []: NB
+Organization Name []:Rutgers
+Organizational Unit Name []:<netid>
+Common Name []:
+Email Address []:neelmay@gmail.com
+######################################
+
+openssl ca -config intermediate/openssl.cnf \
+	-extensions server_cert -days 375 -notext -md sha256 \
+	-in intermediate/csr/www.example.com.csr.pem \
+	-out intermediate/certs/www.example.com.cert.pem
+
+openssl x509 -noout -text \
+	-in intermediate/certs/www.example.com.cert.pem
+
+openssl verify -CAfile intermediate/certs/ca-chain.cert.pem \
+	intermediate/certs/www.example.com.cert.pem
+
+
+
